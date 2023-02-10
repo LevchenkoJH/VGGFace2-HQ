@@ -32,8 +32,12 @@ class Face_detect_crop:
         self.models = {}
         root = os.path.expanduser(root)
         onnx_files = glob.glob(osp.join(root, name, '*.onnx'))
+        # print("chdir", os.pardir('/.'))
+        # print(osp.join(root, name, '*.onnx'))
+        # print("onnx_files", onnx_files)
         onnx_files = sorted(onnx_files)
         for onnx_file in onnx_files:
+            # print("onnx_file ->", onnx_file)
             if onnx_file.find('_selfgen_')>0:
                 #print('ignore:', onnx_file)
                 continue
@@ -44,6 +48,7 @@ class Face_detect_crop:
             else:
                 print('duplicated model task type, ignore:', onnx_file, model.taskname)
                 del model
+        print("models ->", self.models)
         assert 'detection' in self.models
         self.det_model = self.models['detection']
 
