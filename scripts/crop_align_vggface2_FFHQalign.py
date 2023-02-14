@@ -82,17 +82,32 @@ if __name__ == "__main__":
     app.prepare(ctx_id= 0, det_thresh=0.6, det_size=(320,320))
 
     #
-    print("do DIRS", input_dir)
+    # print("do DIRS", input_dir)
     dirs = sorted(os.listdir(input_dir))
-    print("posle Dirs", dirs)
+    # print("posle Dirs", dirs)
+
+
+
+
+    norm_images = sorted(os.listdir(output_dir_ffhqalign))
+    # print(norm_images)
+
+
+
+
 
     # Список папок с изображениями
     # Нужно чтобы в место папок были видео
     handle_dir_list = dirs
 
 
+
     # Перебор по папкам
     # Нужен перебор по видео
     for handle_dir_list_tmp  in tqdm(handle_dir_list):
         print("Выравнивание видео ->", handle_dir_list_tmp)
-        align_image_dir(handle_dir_list_tmp)
+
+        if handle_dir_list_tmp in norm_images:
+            print("Видео уже обработано")
+        else:
+            align_image_dir(handle_dir_list_tmp)
