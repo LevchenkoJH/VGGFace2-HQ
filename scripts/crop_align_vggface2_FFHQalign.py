@@ -18,48 +18,234 @@ from insightface_func.face_detect_crop_ffhq_newarcAlign import Face_detect_crop
 import argparse
 import numpy as np
 
+from сoefficients import tanimoto_coefficient
+from сoefficients import cross_correlation_coefficient
+from сoefficients import kendall_coefficient
 
-# На вход название обрабатываемого видео
-def align_image_dir(dir_name_tmp):
-    # Расположение видео
-    ori_path_tmp = os.path.join(input_dir, dir_name_tmp)
-    print("Путь к видео ->", ori_path_tmp)
 
-    # Где будет сохранен результат выравнивания (Видео)
-    save_dir_ffhqalign = os.path.join(output_dir_ffhqalign, dir_name_tmp)
-    print("save_dir_ffhqalign ->", save_dir_ffhqalign)
 
-    if not os.path.exists(output_dir_ffhqalign):
-        os.makedirs(output_dir_ffhqalign)
 
-    # Расшариваем видео в буфере (frames)
-    video_path_tmp = ori_path_tmp # os.path.join(input_dir, video_path)
-    videoCapture = cv2.VideoCapture()
-    videoCapture.open(video_path_tmp)
-    fps = videoCapture.get(cv2.CAP_PROP_FPS)
-    frames = videoCapture.get(cv2.CAP_PROP_FRAME_COUNT)
 
-    out = cv2.VideoWriter(save_dir_ffhqalign,
-                          cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), fps, (crop_size, crop_size))
 
-    for i in range(int(frames)):
-        ret, frame = videoCapture.read()
 
-        # Если изображение слишком маленькое
-        if frame.shape[0]<250 or frame.shape[1]<250:
-            continue
 
-        # Выравниваем кадр
-        frame = app.get(frame, crop_size, mode=mode)
 
-        # Сохранение
-        if len(frame) == 0:
-            continue
-        else:
-            print(frame[0].shape)
-            out.write(frame[0])
 
-    out.release()
+
+
+
+def video_to_frames(input_dir, output_dir):
+    dirs = sorted(os.listdir(input_dir))
+    print(dirs)
+
+    for video_path in tqdm(dirs):
+        print("Обработка", video_path)
+
+        # Расшариваем видео в буфере (frames)
+        video_path_tmp = os.path.join(input_dir, video_path)
+        videoCapture = cv2.VideoCapture()
+        videoCapture.open(video_path_tmp)
+        frames = videoCapture.get(cv2.CAP_PROP_FRAME_COUNT)
+
+        # output_video_dir = os.path.join(output_dir, video_path)
+        # if not os.path.exists(output_video_dir):
+        #     os.makedirs(output_video_dir)
+
+
+        # Буфер изображений
+        # Из него выбираем кадры, которые будут сохранены для датасета
+        buf = np.array([])
+
+        # Структура
+        # [коэффициент корреляции, индекс первого изображения, индекс второго изображения]
+        coef_pair_frame_array = np.array([])
+        for i in range(int(frames)):
+            ret, frame = videoCapture.read()
+            # Заносим кадры в буффер для дальнейшей обработки
+            if (len(buf) == 0):
+
+                # Если изображение слишком маленькое
+                if frame.shape[0] < 250 or frame.shape[1] < 250:
+                    print("------------------------------------Изображение слишком маленькое------------------------------------", i)
+                    frame = []
+                else:
+                    # Выравниваем кадр
+                    frame = app.get(frame, crop_size, mode=mode)
+
+
+
+                # Проверка
+                if len(frame) == 0:
+                    print("------------------------------------Пустое изображение------------------------------------", i)
+                    # Для избавления от возни с индексами, в буфер отправляется черная картинка
+                    frame = [np.zeros((crop_size, crop_size, 3), dtype=np.uint8)]
+
+
+
+
+
+                buf = np.expand_dims(frame[0], axis=0)
+            else:
+
+                # Если изображение слишком маленькое
+                if frame.shape[0] < 250 or frame.shape[1] < 250:
+                    print(
+                        "------------------------------------Изображение слишком маленькое------------------------------------", i)
+                    frame = []
+                else:
+                    # Выравниваем кадр
+                    frame = app.get(frame, crop_size, mode=mode)
+
+                # Проверка
+                if len(frame) == 0:
+                    print("------------------------------------Пустое изображение------------------------------------", i)
+                    # Для избавления от возни с индексами, в буфер отправляется черная картинка
+                    frame = [np.zeros((crop_size, crop_size, 3), dtype=np.uint8)]
+
+                print(buf.shape)
+                print(np.expand_dims(frame[0], axis=0).shape)
+
+                buf = np.concatenate((buf, np.expand_dims(frame[0], axis=0)), axis=0)
+
+
+
+                # print("----------------------------------------------------------------")
+                # print("kendall_coefficient =", kendall_coefficient(buf[i - 1], buf[i]))
+                # print("cross_correlation_coefficient =", cross_correlation_coefficient(buf[i - 1], buf[i]))
+                # print("tanimoto_coefficient", tanimoto_coefficient(buf[i - 1], buf[i]))
+
+
+                # Вычисляем корреляцию
+                # Нужно проверить, что обе картинки не черные
+                if buf[i - 1][buf[i - 1][:] != 0].shape[0] != 0 and buf[i][buf[i][:] != 0].shape[0] != 0:
+                    # Тогда вычисляем коэффициент корреляции
+                    coef_pair_frame = np.array([kendall_coefficient(buf[i - 1], buf[i]), i - 1, i])
+                else:
+                    # Иначе коэффициент корреляции равен -1
+                    coef_pair_frame = np.array([-1, i - 1, i])
+
+                # Записываем корреляцию для дальнейшего анализа
+                if (len(coef_pair_frame_array) == 0):
+                    coef_pair_frame_array = np.expand_dims(coef_pair_frame, axis=0)
+                else:
+                    coef_pair_frame_array = np.concatenate((coef_pair_frame_array, np.expand_dims(coef_pair_frame, axis=0)), axis=0)
+
+        # Нужно найти пары кадров с подходящей корреляцией
+        # print(coef_pair_frame_array)
+        # print(coef_pair_frame_array[:, 0])
+        # print("Среднее ->", coef_pair_frame_array[:, 0].mean())
+
+        # К какой корреляции должны стремиться, выбираемые кадры
+        need_coef = 0.985 # Нужно указывать в стартовых параметрах
+
+        # Сколько пар кадров берем из одного видео
+        need_count = 5
+        # На столько частей нам нужно поделить видео
+        # и выбрать в каждой части пару наиболее близкую к need_coef
+
+        # Проходим по участкам одинаковой длины
+        for i in range(need_count):
+            # Вычисляем длинну участка
+            frames_range_a = len(coef_pair_frame_array) // need_count + 1
+            frames_range_b = frames_range_a
+            # print("frames_range ->", frames_range_b)
+            # Проверяем что не выходим за границы массива
+            # print("IF", i * frames_range_b + frames_range_b - 1, "----", len(coef_pair_frame_array) - 1)
+            if i * frames_range_b + frames_range_b - 1 > len(coef_pair_frame_array) - 1:
+                # Вычисляем новую длину
+                frames_range_b += len(coef_pair_frame_array) - i * frames_range_b - frames_range_b
+                # print("NEW frames_range ->", frames_range_b)
+
+            print(f"({i * frames_range_a}, { i * frames_range_a + frames_range_b - 1 })")
+
+            # Нужный срез
+            frames_coef = coef_pair_frame_array[i * frames_range_a : i * frames_range_a + frames_range_b]
+
+            # Находим запись с корреляцией, абсолютное значение разности которого, с нужным коэффициентом - минимально
+            condition = np.abs(frames_coef[:, 0] - need_coef)
+            frames_coef = frames_coef[condition == np.min(condition)]
+
+            # Нужно учесть что в срезе может не быть ни одной пары
+            if frames_coef[0][0] != -1:
+                # Сохраняем выделенную пару в соответствующей папке
+                direction = os.path.join(output_dir, video_path, str(i).zfill(3) + " coef:" + str(frames_coef[0][0])[:6])
+                if not os.path.exists(direction):
+                    os.makedirs(direction)
+
+                # Сохраняем пару кадров
+                print(os.path.join(direction, str(int(frames_coef[0][1])).zfill(5)))
+                print(os.path.join(direction, str(int(frames_coef[0][2])).zfill(5)))
+                cv2.imwrite(os.path.join(direction, str("%s.png" % str(int(frames_coef[0][1])).zfill(5))), buf[int(frames_coef[0][1])])
+                cv2.imwrite(os.path.join(direction, str("%s.png" % str(int(frames_coef[0][2])).zfill(5))), buf[int(frames_coef[0][2])])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # На вход название обрабатываемого видео
+# def align_image_dir(dir_name_tmp):
+#     # Расположение видео
+#     ori_path_tmp = os.path.join(input_dir, dir_name_tmp)
+#     print("Путь к видео ->", ori_path_tmp)
+#
+#     # Где будет сохранен результат выравнивания (Видео)
+#     save_dir_ffhqalign = os.path.join(output_dir_ffhqalign, dir_name_tmp)
+#     print("save_dir_ffhqalign ->", save_dir_ffhqalign)
+#
+#     if not os.path.exists(output_dir_ffhqalign):
+#         os.makedirs(output_dir_ffhqalign)
+#
+#     # Расшариваем видео в буфере (frames)
+#     video_path_tmp = ori_path_tmp # os.path.join(input_dir, video_path)
+#     videoCapture = cv2.VideoCapture()
+#     videoCapture.open(video_path_tmp)
+#     fps = videoCapture.get(cv2.CAP_PROP_FPS)
+#     frames = videoCapture.get(cv2.CAP_PROP_FRAME_COUNT)
+#
+#     out = cv2.VideoWriter(save_dir_ffhqalign,
+#                           cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), fps, (crop_size, crop_size))
+#
+#     for i in range(int(frames)):
+#         ret, frame = videoCapture.read()
+#
+#         # Если изображение слишком маленькое
+#         if frame.shape[0]<250 or frame.shape[1]<250:
+#             continue
+#
+#         # Выравниваем кадр
+#         frame = app.get(frame, crop_size, mode=mode)
+#
+#         # Сохранение
+#         if len(frame) == 0:
+#             continue
+#         else:
+#             print(frame[0].shape)
+#             out.write(frame[0])
+#
+#     out.release()
 
 # Для выравнивания датасета
 if __name__ == "__main__":
@@ -81,33 +267,22 @@ if __name__ == "__main__":
 
     app.prepare(ctx_id= 0, det_thresh=0.6, det_size=(320,320))
 
-    #
-    # print("do DIRS", input_dir)
     dirs = sorted(os.listdir(input_dir))
-    # print("posle Dirs", dirs)
 
-
-
-
-    norm_images = sorted(os.listdir(output_dir_ffhqalign))
+    ready_video = sorted(os.listdir(output_dir_ffhqalign))
     # print(norm_images)
-
-
-
-
 
     # Список папок с изображениями
     # Нужно чтобы в место папок были видео
-    handle_dir_list = dirs
-
-
 
     # Перебор по папкам
     # Нужен перебор по видео
-    for handle_dir_list_tmp  in tqdm(handle_dir_list):
-        print("Выравнивание видео ->", handle_dir_list_tmp)
+    # for dir in tqdm(dirs):
+    #     print("Выравнивание видео ->", dir)
+    #
+    #     if dir in ready_video:
+    #         print("Видео уже обработано")
+    #     else:
+    #         align_image_dir(dir)
 
-        if handle_dir_list_tmp in norm_images:
-            print("Видео уже обработано")
-        else:
-            align_image_dir(handle_dir_list_tmp)
+    video_to_frames(input_dir, output_dir_ffhqalign)
