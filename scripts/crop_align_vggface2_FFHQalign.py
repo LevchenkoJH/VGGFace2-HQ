@@ -26,8 +26,15 @@ def video_to_frames(input_dir, output_dir):
     dirs = sorted(os.listdir(input_dir))
     print(dirs)
 
+    ready_video_ids = os.listdir(output_dir_ffhqalign)
+    print(ready_video_ids)
+
     for video_path in tqdm(dirs):
         print("Обработка", video_path)
+
+        if (video_path in ready_video_ids):
+            print("Видео", video_path, "уже обработано")
+            continue
 
         # Расшариваем видео в буфере (frames)
         video_path_tmp = os.path.join(input_dir, video_path)
